@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#1a1c2c" />
+  <title>Kitty</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="hud">
+      <div class="meter" data-key="hunger"><span class="label">Matcha</span><div class="bar"><i></i></div></div>
+      <div class="meter" data-key="happy"><span class="label">Love</span><div class="bar"><i></i></div></div>
+      <div class="meter" data-key="energy"><span class="label">Nap</span><div class="bar"><i></i></div></div>
+    </header>
+
+    <div id="stage-wrap">
+      <div id="stage"></div>
+      <div id="bubble" hidden></div>
+    </div>
+
+    <nav id="actions">
+      <button data-action="feed">Matcha</button>
+      <button data-action="nap">Nap</button>
+      <button data-action="wardrobe">Wardrobe</button>
+    </nav>
+
+    <section id="wardrobe" class="drawer" hidden>
+      <div class="drawer-head"><span>Wardrobe</span><button data-close>Done</button></div>
+      <div id="wardrobe-grid"></div>
+    </section>
+  </div>
+
+  <div id="title" class="screen">
+    <div class="title-card">
+      <canvas id="title-cat" width="96" height="96"></canvas>
+      <h1 id="title-name"></h1>
+      <p class="blink">Tap to start</p>
+    </div>
+  </div>
+
+  <div id="naming" class="screen" hidden>
+    <form class="paper" id="naming-form">
+      <h2 id="naming-title"></h2>
+      <p id="naming-body"></p>
+      <input id="naming-input" type="text" maxlength="16" autocomplete="off" autocapitalize="words" spellcheck="false" />
+      <button class="primary" id="naming-ok" type="submit"></button>
+    </form>
+  </div>
+
+  <div id="letter" class="screen" hidden>
+    <div class="paper">
+      <div id="letter-text"></div>
+      <div id="letter-buttons" hidden>
+        <button id="btn-yes" class="primary"></button>
+        <button id="btn-think"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="card" class="screen" hidden>
+    <div class="paper">
+      <h2 id="card-title"></h2>
+      <p id="card-body"></p>
+      <img id="card-photo" alt="" hidden />
+      <button id="card-close"></button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

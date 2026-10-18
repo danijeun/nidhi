@@ -1,0 +1,158 @@
+:root {
+  --ink: #1a1c2c;
+  --night: #29366f;
+  --paper: #f4f4f4;
+  --cream: #ffcd75;
+  --pink: #ff77a8;
+  --red: #b13e53;
+  --green: #38b764;
+  --blue: #41a6f6;
+  --muted: #94b0c2;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: 'Pixelify Sans', ui-monospace, monospace;
+  font-variant-ligatures: none; /* Pixelify's fi ligature looks like a capital A ("first" read as "Arst") */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  font-size: 18px;
+  color: var(--ink);
+  background: var(--cream);
+  border: 3px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink), inset 0 -3px 0 rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-height: 44px;
+  cursor: pointer;
+}
+button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+button.primary { background: var(--pink); }
+button:disabled { opacity: 0.5; }
+
+#app {
+  height: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+}
+
+/* HUD meters */
+#hud { display: flex; gap: 8px; align-items: center; }
+.meter { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.bar { height: 10px; background: var(--night); border: 2px solid var(--paper); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 50%; background: var(--green); transition: width 0.3s steps(6); }
+.meter.low .bar i { background: var(--red); }
+
+/* Stage: square, pixel-crisp */
+#stage-wrap { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+#stage { width: 100%; height: 100%; }
+#stage canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+#bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: var(--paper);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 16px;
+  max-width: 70%;
+  text-align: center;
+  pointer-events: none;
+  white-space: pre-line;
+}
+#bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: -9px;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--ink);
+}
+
+#actions { display: flex; gap: 8px; }
+#actions button { flex: 1; }
+
+/* Wardrobe drawer */
+.drawer {
+  flex: none;
+  background: var(--night);
+  border: 3px solid var(--paper);
+  border-radius: 6px;
+  padding: 10px;
+}
+.drawer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 20px; }
+#app.dressing #actions { display: none; }
+#wardrobe-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+#wardrobe-grid button { padding: 4px; display: flex; flex-direction: column; align-items: center; font-size: 12px; background: var(--paper); }
+#wardrobe-grid button.on { background: var(--pink); }
+#wardrobe-grid canvas { width: 100%; max-width: 56px; image-rendering: pixelated; }
+
+/* Full-screen overlays */
+.screen {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(26, 28, 44, 0.75);
+  z-index: 20;
+  padding: 16px;
+}
+.screen[hidden], [hidden] { display: none !important; }
+
+#title { background: var(--ink); cursor: pointer; }
+.title-card { text-align: center; }
+/* soft spotlight so the black cat doesn't vanish into the dark title screen */
+#title-cat { width: 192px; height: 192px; image-rendering: pixelated; background: radial-gradient(closest-side, #566c86, #333c57 55%, transparent); }
+#title h1 { font-size: 40px; margin: 8px 0; color: var(--cream); }
+.blink { animation: blink 1s steps(2) infinite; font-size: 20px; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.paper {
+  background: var(--paper);
+  color: var(--ink);
+  border: 4px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 0 6px 0 var(--ink);
+  padding: 20px;
+  width: min(440px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: unfold 0.35s steps(5);
+}
+@keyframes unfold { from { transform: scaleY(0.1); } to { transform: scaleY(1); } }
+
+#letter-text { font-size: 20px; line-height: 1.45; white-space: pre-line; min-height: 6em; }
+#letter-text .question { color: var(--red); font-weight: 600; font-size: 24px; }
+#letter-buttons { display: flex; gap: 10px; margin-top: 18px; }
+#letter-buttons button { flex: 1; }
+
+#card h2 { margin: 0 0 8px; color: var(--red); font-size: 30px; }
+#card p { font-size: 19px; line-height: 1.4; white-space: pre-line; }
+#card img { width: 100%; image-rendering: auto; border: 3px solid var(--ink); margin-bottom: 12px; }
+#card button { width: 100%; }
+
+#naming h2 { margin: 0 0 8px; color: var(--red); font-size: 28px; }
+#naming p { font-size: 19px; margin: 0 0 12px; }
+#naming input {
+  font: inherit; font-size: 24px; width: 100%; box-sizing: border-box;
+  padding: 8px 10px; margin-bottom: 14px; color: var(--ink); background: #fff;
+  border: 3px solid var(--ink); border-radius: 6px;
+  -webkit-user-select: text; user-select: text;
+}
+#naming button { width: 100%; }
