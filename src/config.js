@@ -37,13 +37,16 @@ export const CONFIG = {
 
   // The letter. Each string is a paragraph; it types out one character at a time.
   // TODO: write this in your own words. Short and specific beats long and grand.
+  // Short paragraphs on purpose: on a phone each one wraps to 2 to 5 lines.
   letter: [
     'Hi Nidhi,',
-    'I found this note on the table and I think it is for you.',
-    'I am not really good at writing letters, but I wanted to tell you that I like you a lot. I guess you already know that, but I wanted to ask you anyway because I know how important is to you to make things official. I hope you will say yes. I have been working on this for a while, and I hope you like it. I know it is not perfect, but I hope you will like it anyway.',
-    // Harry Potter: Platform 9¾ at King's Cross.
-    'luv u 9¾',
+    'I found this note on the table and I think it’s for you.',
+    'I’m not really good at writing letters, but I wanted to tell you that I like you a lot. I guess you already know that.',
+    'I still wanted to ask, though, because I know how important it is to you to make things official.',
+    'I’ve been working on this for a while. It’s not perfect, but I hope you like it. And I really hope you say yes :)',
   ],
+  // Sign-off under the letter, right aligned. Harry Potter: Platform 9¾.
+  signoff: 'luv u 9¾',
   question: 'Will you be my girlfriend?',
   yesLabel: 'Yes!',
   thinkLabel: 'Let me think',
@@ -51,12 +54,12 @@ export const CONFIG = {
 
   yesCard: {
     title: 'LETS FFF GOOOOOO!!',
-    body: '{cat} is very happy.\nSo am I.', // TODO ({cat} = the cat's name)
+    body: '{cat} is very happy.', // TODO ({cat} = the cat's name)
     button: 'Back to the room',
   },
   thinkCard: {
     title: 'Take your time',
-    body: '{cat} will keep the note safe on the table.', // TODO
+    body: '{cat} will keep the note safe on the desk.', // TODO
     button: 'Back to the room',
   },
 
@@ -64,13 +67,26 @@ export const CONFIG = {
   flavor: {
     window: 'I wonder if this is the best spot on campus to jump from. Would I die?',
     plant: 'I am not allowed to eat this one.',
+    dispenser: 'Thanks god I have the dispenser... \nI hate tap water.', // the water dispenser
+    microwave: 'Do NOT microwave the matcha.',
+    friends: 'So many pictures of YOU and your friends!', // the photo wall over the bed
     photo: null, // the photo frame opens the photo card instead
     noteEarly: 'Not yet! Take care of me first.',
-    noteReady: 'What is that on the table?',
+    noteReady: 'What is that on the desk?',
     hungry: 'I want my strawberry matcha...',
     matcha: 'Strawberry matcha!', // said on the first sip each visit
-    sleepy: 'I am so tired like that mf.',
+    nap: 'Ewww why is the bed sweaty?', // said when the cat lies down on her bed
+    sleepy: 'I am so tired like that mf.', // reminder when the Nap meter is low
     hello: 'Hi Nidhi! I am {cat}.\nI just moved in. Will you take care of me?',
+  },
+
+  // Optional: tapping the photo wall also opens this card. Set src to a real photo
+  // (e.g. 'assets/friends.jpg' in public/assets/) to turn it on.
+  friendsCard: {
+    title: 'The wall',
+    body: 'Nidhi and the people she loves.',
+    src: null,
+    button: 'Close',
   },
 
   photoCard: {
@@ -92,11 +108,27 @@ export const CONFIG = {
   },
 
   // When does the note start sparkling?
+  // The letter unlocks when the cat reaches this level. Normal play gets there in
+  // about 2.5 to 3 minutes. Safety net: after catchUpSeconds of play the cat jumps
+  // straight to that level, so the letter is always ready well before 5 minutes.
   trigger: {
-    happy: 80, // happiness at least this
-    accessories: 1, // wearing at least this many
-    interactions: 6, // at least this many feed/pet/nap/equip actions
-    fallbackSeconds: 240, // or after this much play, no matter what
+    level: 5,
+    catchUpSeconds: 210,
+    catchUpLine: 'You took such good care of me!',
+    levelLine: 'Level {level}! And... what is that on the desk?', // said when the letter unlocks
+  },
+
+  // Experience: caring for the cat earns XP, every level unlocks the next accessory.
+  // Secret costumes (name / plant eggs) are not on this ladder. See XP_PLAN.md.
+  xp: {
+    levels: [20, 25, 30, 35, 45, 55], // XP needed to go from level 1 to 2, 2 to 3, ... (letter at level 5 = 110 XP)
+    unlocks: ['bow', 'sunglasses', 'collar', 'partyhat', 'heartglasses', 'scarf', 'crown'], // level 1, 2, 3, ...
+    gain: { feed: 10, nap: 10, pet: 3, water: 4, firstTry: 5, discover: 5 },
+    neededBelow: 50, // feeding / napping when that meter is under this...
+    neededMultiplier: 2, // ...is worth this many times more
+    cooldownMs: { pet: 3000, water: 10000 },
+    levelUp: 'Level {level}! I unlocked the {item}.',
+    locked: 'Unlocks at level {level}.',
   },
 
   catSpeed: 42, // px per second in game pixels

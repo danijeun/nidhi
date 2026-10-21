@@ -81,7 +81,7 @@ button:disabled { opacity: 0.5; }
 #bubble::after {
   content: '';
   position: absolute;
-  left: 50%; bottom: -9px;
+  left: var(--tail, 50%); bottom: -9px;
   transform: translateX(-50%);
   border: 6px solid transparent;
   border-top-color: var(--ink);
@@ -137,10 +137,27 @@ button:disabled { opacity: 0.5; }
 }
 @keyframes unfold { from { transform: scaleY(0.1); } to { transform: scaleY(1); } }
 
-#letter-text { font-size: 20px; line-height: 1.45; white-space: pre-line; min-height: 6em; }
-#letter-text .question { color: var(--red); font-weight: 600; font-size: 24px; }
+/* Letter: 18px with 1.4 line spacing (inside the 120-145% range) and short
+   paragraphs separated by a small gap instead of a full empty line. */
+#letter-text { font-size: 18px; line-height: 1.4; }
+#letter-text p { margin: 0 0 0.75em; overflow-wrap: break-word; }
+#letter-text .ghost { visibility: hidden; }
+#letter-text .signoff { text-align: right; font-size: 24px; font-weight: 600; margin-top: 0.4em; }
+#letter-text .question { text-align: center; color: var(--red); font-weight: 600; font-size: 24px; line-height: 1.25; margin: 0.9em 0 0; }
 #letter-buttons { display: flex; gap: 10px; margin-top: 18px; }
-#letter-buttons button { flex: 1; }
+#letter-buttons button { flex: 1; white-space: nowrap; }
+#letter-buttons.waiting { visibility: hidden; }
+
+/* Small phones (iPhone SE, compact Androids): a bit tighter so the whole
+   letter, question and buttons fit without scrolling. */
+@media (max-width: 380px), (max-height: 700px) {
+  #letter .paper { padding: 16px; }
+  #letter-text { font-size: 17px; line-height: 1.35; }
+  #letter-text p { margin-bottom: 0.6em; }
+  #letter-text .signoff, #letter-text .question { font-size: 22px; }
+  #letter-buttons { margin-top: 14px; }
+  #letter-buttons button { font-size: 16px; padding: 8px 10px; }
+}
 
 #card h2 { margin: 0 0 8px; color: var(--red); font-size: 30px; }
 #card p { font-size: 19px; line-height: 1.4; white-space: pre-line; }
@@ -156,3 +173,35 @@ button:disabled { opacity: 0.5; }
   -webkit-user-select: text; user-select: text;
 }
 #naming button { width: 100%; }
+
+/* Experience row: level badge, gold bar, next unlock */
+#xp { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+#xp-level { min-width: 38px; color: var(--cream); font-weight: 600; }
+#xp .bar { flex: 1; }
+#xp .bar i { background: var(--cream); transition: width 0.4s steps(8); }
+#xp-next { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 2px solid var(--paper); border-radius: 4px; background: var(--night); }
+#xp-next canvas { width: 26px; height: 26px; image-rendering: pixelated; }
+#xp-next b { display: none; font-size: 11px; color: var(--cream); }
+#xp-next.max canvas { display: none; }
+#xp-next.max b { display: block; }
+#xp.flash .bar { animation: xpflash 0.25s steps(2) 4; }
+@keyframes xpflash { 50% { border-color: var(--cream); box-shadow: 0 0 0 2px var(--cream); } }
+
+.float-xp {
+  position: absolute; transform: translate(-50%, -100%);
+  color: var(--cream); font-weight: 600; font-size: 16px;
+  text-shadow: 0 2px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 -2px 0 var(--ink);
+  pointer-events: none; animation: floatxp 0.9s steps(9) forwards;
+}
+@keyframes floatxp { to { transform: translate(-50%, -100%) translateY(-28px); opacity: 0; } }
+
+/* New accessory unlocked: dot on the Wardrobe button until it's opened */
+#actions button.new { position: relative; }
+#actions button.new::after { content: ''; position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; border-radius: 50%; background: var(--pink); border: 2px solid var(--ink); }
+
+/* Locked accessories: silhouette + level */
+#wardrobe-grid button { position: relative; }
+#wardrobe-grid button em { font-style: normal; }
+#wardrobe-grid button.locked { background: var(--muted); }
+#wardrobe-grid button.locked canvas { filter: brightness(0); opacity: 0.45; }
+#wardrobe-grid button.locked span { display: none; }

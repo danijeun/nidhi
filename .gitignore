@@ -1,2 +1,6 @@
 node_modules/
 dist/
+
+# Local planning notes (not part of the game)
+ROOM_PLAN.md
+XP_PLAN.md

@@ -19,5 +19,9 @@ export function newState() {
     interactions: 0,
     playSeconds: 0,
     answer: null, // 'yes' | 'think' | null
+    xp: 0, // total XP this visit
+    level: 1,
+    unlocked: [CONFIG.xp.unlocks[0]], // accessory ids from the XP ladder
+    discovered: [], // things in her room tapped at least once (first visit gives XP)
   };
 }

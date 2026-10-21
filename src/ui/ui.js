@@ -1,7 +1,7 @@
 // DOM overlays: HUD meters, speech bubble, wardrobe, letter, cards, title.
 // Text lives in the DOM (not the 192px canvas) so it stays crisp on phones.
 
-import { ACCESSORIES, drawPreview } from '../art/placeholder.js';
+import { ACCESSORIES, drawAccIcon, drawPreview } from '../art/placeholder.js';
 import { CONFIG } from '../config.js';
 import { sfx } from '../sfx.js';
 
@@ -17,6 +17,44 @@ export function updateMeters(state) {
   }
 }
 
+
+// ---------- experience ----------
+
+// Level badge, gold bar (XP into this level) and the next accessory to unlock.
+export function updateXp(state) {
+  const { levels, unlocks } = CONFIG.xp;
+  const max = state.level > levels.length;
+  const before = levels.slice(0, state.level - 1).reduce((a, b) => a + b, 0);
+  const need = levels[state.level - 1];
+  $('#xp-level').textContent = `Lv ${state.level}`;
+  $('#xp .bar i').style.width = max ? '100%' : `${((state.xp - before) / need) * 100}%`;
+  const next = $('#xp-next');
+  next.classList.toggle('max', max);
+  if (!max) drawAccIcon(next.querySelector('canvas'), unlocks[state.level]);
+}
+
+export function flashLevelUp() {
+  const el = $('#xp');
+  el.classList.remove('flash');
+  void el.offsetWidth; // restart the animation
+  el.classList.add('flash');
+  document.querySelector('#actions [data-action="wardrobe"]').classList.add('new');
+}
+
+// "+10" rising from a point in game coordinates.
+export function floatText(game, gx, gy, text) {
+  const wrap = $('#stage-wrap');
+  const r = game.canvas.getBoundingClientRect();
+  const w = wrap.getBoundingClientRect();
+  const s = r.width / game.scale.width;
+  const el = document.createElement('span');
+  el.className = 'float-xp';
+  el.textContent = text;
+  el.style.left = `${r.left - w.left + gx * s}px`;
+  el.style.top = `${r.top - w.top + gy * s}px`;
+  wrap.append(el);
+  el.addEventListener('animationend', () => el.remove());
+}
 
 export function onAction(handler) {
   for (const b of document.querySelectorAll('#actions button')) {
@@ -52,13 +90,20 @@ export function placeBubble(game, gx, gy) {
   const r = canvas.getBoundingClientRect();
   const s = r.width / game.scale.width;
   const el = $('#bubble');
-  el.style.left = `${r.left - wrap.left + gx * s}px`;
+  // Keep the whole bubble inside the stage (the cat can stand near the walls);
+  // the tail moves instead so it still points at the cat.
+  const x = r.left - wrap.left + gx * s;
+  const half = el.offsetWidth / 2;
+  const lo = r.left - wrap.left + half + 4, hi = r.right - wrap.left - half - 4;
+  const cx = lo > hi ? (lo + hi) / 2 : Math.min(Math.max(x, lo), hi);
+  el.style.left = `${cx}px`;
   el.style.top = `${r.top - wrap.top + gy * s - 6}px`;
+  el.style.setProperty('--tail', `${Math.min(Math.max(x - cx + half, 14), half * 2 - 14)}px`);
 }
 
 // ---------- wardrobe ----------
 
-export function buildWardrobe(getEquipped, onToggle) {
+export function buildWardrobe(getEquipped, onToggle, onLocked) {
   const grid = $('#wardrobe-grid');
   grid.innerHTML = '';
   for (const a of ACCESSORIES) {
@@ -71,7 +116,10 @@ export function buildWardrobe(getEquipped, onToggle) {
     const label = document.createElement('span');
     label.textContent = a.label;
     b.append(c, label);
+    const lock = document.createElement('em');
+    b.append(lock);
     b.addEventListener('click', () => {
+      if (b.classList.contains('locked')) return onLocked(a);
       onToggle(a);
       refreshWardrobe(getEquipped());
     });
@@ -86,6 +134,25 @@ export function refreshWardrobe(equipped) {
   for (const b of document.querySelectorAll('#wardrobe-grid button')) b.classList.toggle('on', on.has(b.dataset.id));
 }
 
+// Ladder accessories not reached yet: dark silhouette + "Lv N".
+export function setLocks(unlocked) {
+  const ladder = CONFIG.xp.unlocks;
+  for (const b of document.querySelectorAll('#wardrobe-grid button')) {
+    const lv = ladder.indexOf(b.dataset.id) + 1;
+    const locked = lv > 0 && !unlocked.includes(b.dataset.id);
+    b.style.order = lv > 0 ? lv : 100; // ladder order, secret costumes last
+    if (b.classList.contains('locked') !== locked || !b.dataset.drawn) {
+      // locked: the accessory's own silhouette (a teaser), unlocked: worn by the cat
+      const c = b.querySelector('canvas');
+      if (locked) drawAccIcon(c, b.dataset.id);
+      else drawPreview(c, [b.dataset.id]);
+      b.dataset.drawn = '1';
+    }
+    b.classList.toggle('locked', locked);
+    b.querySelector('em').textContent = locked ? `Lv ${lv}` : '';
+  }
+}
+
 export function unlockAccessory(id) {
   const b = document.querySelector(`#wardrobe-grid button[data-id="${id}"]`);
   if (b) b.hidden = false;
@@ -94,6 +161,7 @@ export function unlockAccessory(id) {
 export function toggleWardrobe(force) {
   const el = $('#wardrobe');
   el.hidden = force === undefined ? !el.hidden : !force;
+  if (!el.hidden) document.querySelector('#actions [data-action="wardrobe"]').classList.remove('new');
   $('#app').classList.toggle('dressing', !el.hidden);
   window.dispatchEvent(new Event('resize')); // let Phaser re-fit the smaller stage
   sfx.tap();
@@ -151,32 +219,52 @@ export function showLetter({ reread = false } = {}) {
     think.textContent = CONFIG.thinkLabel;
     think.hidden = reread;
     text.innerHTML = '';
-    buttons.hidden = true;
+    buttons.hidden = false;
+    buttons.classList.add('waiting'); // keeps its space, invisible until the typing ends
     el.hidden = false;
     sfx.paper();
 
-    const body = CONFIG.letter.join('\n\n') + '\n\n';
-    const q = document.createElement('span');
-    q.className = 'question';
-    const bodyNode = document.createTextNode('');
-    text.append(bodyNode, q);
+    // One block per paragraph. Each block holds the typed part plus the rest of
+    // its text invisible, so the whole letter is laid out from the start: the
+    // box doesn't grow and words don't jump to the next line while typing.
+    const parts = [
+      ...CONFIG.letter.map((t) => ({ t, cls: 'para' })),
+      CONFIG.signoff && { t: CONFIG.signoff, cls: 'signoff' },
+      { t: CONFIG.question, cls: 'question' },
+    ].filter(Boolean).map(({ t, cls }) => {
+      const block = document.createElement('p');
+      block.className = cls;
+      const typed = document.createElement('span');
+      const ghost = document.createElement('span');
+      ghost.className = 'ghost';
+      ghost.textContent = t;
+      block.append(typed, ghost);
+      text.append(block);
+      return { t, block, typed, ghost };
+    });
+    const paper = el.querySelector('.paper');
+    paper.scrollTop = 0;
 
-    let i = 0;
-    const total = body.length + CONFIG.question.length;
-    let timer = null;
+    let part = 0, i = 0, timer = null;
     const finish = () => {
       clearInterval(timer);
-      bodyNode.data = body;
-      q.textContent = CONFIG.question;
-      buttons.hidden = false;
+      for (const p of parts) { p.typed.textContent = p.t; p.ghost.textContent = ''; }
+      buttons.classList.remove('waiting');
+      if (!reread) buttons.scrollIntoView({ block: 'nearest' });
       el.removeEventListener('pointerup', finish);
     };
     timer = setInterval(() => {
+      const p = parts[part];
       i++;
-      if (i <= body.length) bodyNode.data = body.slice(0, i);
-      else q.textContent = CONFIG.question.slice(0, i - body.length);
+      p.typed.textContent = p.t.slice(0, i);
+      p.ghost.textContent = p.t.slice(i);
+      if (i === 1) p.block.scrollIntoView({ block: 'nearest' }); // small phones: follow the typing
       if (i % 2) sfx.type();
-      if (i >= total) finish();
+      if (i >= p.t.length) {
+        part++;
+        i = 0;
+        if (part >= parts.length) finish();
+      }
     }, 38);
     el.addEventListener('pointerup', finish); // tap to skip the typing
     if (reread) finish();

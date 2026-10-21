@@ -38,6 +38,8 @@ export const TAGS = {
   sit: { rate: 1, repeat: -1, frames: [{ pose: 'sit', bob: 0 }] },
   jump: { rate: 1, repeat: -1, frames: [{ pose: 'stand', bob: -1, legs: 'stretch', tail: 1 }] },
   read: { rate: 2, repeat: -1, frames: [{ pose: 'sit', bob: 0, eyes: 'down', note: true }, { pose: 'sit', bob: 1, eyes: 'down', note: true }] },
+  // Standing on the microwave, head down over the edge to the straw.
+  drink: { rate: 3, repeat: -1, frames: [{ pose: 'lean', bob: 0, eyes: 'closed' }, { pose: 'lean', bob: 1, eyes: 'closed' }] },
 };
 
 // Flatten tags into one frame list and remember where each tag starts.
@@ -105,6 +107,16 @@ export function geometry(f) {
       body: [{ x: 10, y: 16 + b, w: 12, h: 12 - b }],
       legs: [{ x: 18, y: 26, w: 2, h: 4 }, { x: 21, y: 26, w: 2, h: 4 }],
       tail: [{ x: 4, y: 27, w: 7, h: 2 }],
+    };
+  }
+  // Head lowered to paw level and pushed forward, tail up. The mouth (where a
+  // straw meets it) is at column head.x + 11, row head.y + 6.
+  if (f.pose === 'lean') {
+    return {
+      head: { x: 19, y: 20 + b },
+      body: [{ x: 7, y: 18, w: 14, h: 9 }],
+      legs: [8, 11, 16, 19].map((x) => ({ x, y: 27, w: 2, h: 4 })),
+      tail: [{ x: 5, y: 10, w: 2, h: 9 }],
     };
   }
   if (f.pose === 'lie') {
@@ -323,56 +335,173 @@ function drawAccFrame(ctx, ox, f, id) {
 }
 
 // ---------- room ----------
+// Nidhi's room. Back wall with the window in the middle, wooden floor.
+// Furniture against the side walls faces into the room: it shows its front
+// plus a darker side face going back to the wall (like a product photo).
 
-export const ROOM = { w: 192, h: 256, wallH: 90 };
+export const ROOM = { w: 192, h: 256, wallH: 84 };
+
+const WOOD = { top: '#c98a5a', mid: '#a0603b', dark: '#7a4628' };
+
+// Her colors: warm tan walls, navy wall to wall carpet (broadloom).
+const WALL = { base: '#e3c08d', dot: '#d6b07c', side: '#cfa874', corner: '#b8925e' };
+const CARPET = { base: '#0b2447', light: '#10305c', dark: '#081b38', edge: '#06152b' };
 
 function drawRoom(ctx) {
   const { w, h, wallH } = ROOM;
-  rect(ctx, 0, 0, w, wallH, '#566c86');
-  for (let y = 6; y < wallH - 6; y += 10) for (let x = (y / 10) % 2 ? 4 : 9; x < w; x += 10) rect(ctx, x, y, 1, 1, '#6a82a0');
-  rect(ctx, 0, wallH, w, h - wallH, '#a0603b');
-  for (let y = wallH + 10; y < h; y += 12) rect(ctx, 0, y, w, 1, '#7a4628');
-  for (let y = wallH; y < h; y += 12) {
-    const off = ((y - wallH) / 12) % 2 ? 22 : 48;
-    for (let x = off; x < w; x += 52) rect(ctx, x, y, 1, 12, '#7a4628');
-  }
-  rect(ctx, 0, wallH - 4, w, 4, '#333c57'); // baseboard
+  rect(ctx, 0, 0, w, wallH, WALL.base);
+  for (let y = 6; y < wallH - 6; y += 10) for (let x = (y / 10) % 2 ? 4 : 9; x < w; x += 10) rect(ctx, x, y, 1, 1, WALL.dot);
+  // side walls: darker strips meeting the back wall at the corners
+  rect(ctx, 0, 0, 6, wallH, WALL.side);
+  rect(ctx, w - 6, 0, 6, wallH, WALL.side);
+  rect(ctx, 6, 0, 1, wallH, WALL.corner);
+  rect(ctx, w - 7, 0, 1, wallH, WALL.corner);
 
-  // window
-  rect(ctx, 22, 22, 40, 34, PAL.white);
-  rect(ctx, 25, 25, 34, 28, '#73eff7');
-  rect(ctx, 41, 25, 2, 28, PAL.white);
-  rect(ctx, 25, 38, 34, 2, PAL.white);
-  rect(ctx, 30, 30, 6, 2, PAL.white); // cloud
-  rect(ctx, 28, 32, 10, 2, PAL.white);
-
-  // rug
-  const cx = 92, cy = 190, rx = 48, ry = 22;
-  for (let y = -ry; y <= ry; y++) for (let x = -rx; x <= rx; x++) {
-    const d = (x * x) / (rx * rx) + (y * y) / (ry * ry);
-    if (d <= 1) rect(ctx, cx + x, cy + y, 1, 1, d > 0.8 ? PAL.red : d > 0.55 ? PAL.pink : '#e06090');
+  // Broadloom: one even color with a fine, low contrast pile grain (no planks,
+  // no pattern, so it reads as a flat floor). Fixed seed: same carpet every load.
+  rect(ctx, 0, wallH, w, h - wallH, CARPET.base);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let y = wallH; y < h; y++) for (let x = 0; x < w; x++) {
+    const r = rnd();
+    if (r < 0.06) rect(ctx, x, y, 1, 1, CARPET.light);
+    else if (r < 0.11) rect(ctx, x, y, 1, 1, CARPET.dark);
   }
+  rect(ctx, 0, wallH, w, 2, CARPET.edge); // shadow under the baseboard
+  rect(ctx, 0, wallH, 2, h - wallH, CARPET.edge); // carpet meets the side walls
+  rect(ctx, w - 2, wallH, 2, h - wallH, CARPET.edge);
+  rect(ctx, 0, wallH - 4, w, 4, PAL.white); // baseboard
+  rect(ctx, 0, wallH - 4, w, 1, WALL.corner);
+
+  // window, middle of the back wall, pink curtains
+  const wx = 76;
+  rect(ctx, wx, 18, 40, 34, PAL.white);
+  rect(ctx, wx + 3, 21, 34, 28, '#73eff7');
+  rect(ctx, wx + 19, 21, 2, 28, PAL.white);
+  rect(ctx, wx + 3, 34, 34, 2, PAL.white);
+  rect(ctx, wx + 8, 26, 6, 2, PAL.white); // cloud
+  rect(ctx, wx + 6, 28, 10, 2, PAL.white);
+  rect(ctx, wx - 8, 12, 56, 2, PAL.out); // curtain rod
+  for (const cx of [wx - 6, wx + 38]) {
+    rect(ctx, cx, 14, 8, 44, PAL.out);
+    rect(ctx, cx + 1, 14, 6, 43, PAL.pink);
+    for (let y = 16; y < 56; y += 4) rect(ctx, cx + 3, y, 1, 2, '#e06090');
+  }
+  rect(ctx, wx, 52, 40, 3, PAL.out); // sill
+  rect(ctx, wx + 1, 52, 38, 2, PAL.white);
+}
+
+// Box outline + fill in one call.
+function box(ctx, x, y, w, h, c) {
+  rect(ctx, x, y, w, h, PAL.out);
+  rect(ctx, x + 1, y + 1, w - 2, h - 2, c);
 }
 
 // Furniture: each its own texture so it can be depth sorted and tapped.
+// `frames` > 1 draws a strip of frames side by side (draw gets the frame index).
 const FURNITURE = {
-  table: { w: 40, h: 30, draw(ctx) {
-    rect(ctx, 0, 0, 40, 10, PAL.out);
-    rect(ctx, 1, 1, 38, 8, '#c98a5a');
-    rect(ctx, 0, 10, 40, 4, PAL.out);
-    rect(ctx, 1, 10, 38, 3, '#7a4628');
-    for (const x of [2, 34]) { rect(ctx, x, 14, 4, 16, PAL.out); rect(ctx, x + 1, 14, 2, 15, '#7a4628'); }
+  // Top down bed: headboard + pillow against the back wall, foot toward the viewer.
+  bed: { w: 46, h: 72, draw(ctx) {
+    box(ctx, 0, 0, 46, 14, WOOD.top); // headboard
+    rect(ctx, 1, 10, 44, 3, WOOD.dark);
+    for (const x of [0, 42]) box(ctx, x, 0, 4, 16, WOOD.dark); // posts
+    box(ctx, 2, 12, 42, 52, PAL.white); // mattress
+    box(ctx, 6, 14, 34, 11, PAL.white); // pillow
+    rect(ctx, 7, 22, 32, 2, '#dfe7ee');
+    rect(ctx, 22, 15, 1, 8, '#dfe7ee'); // crease
+    // blanket with a folded pink edge, hanging over the foot
+    box(ctx, 2, 27, 42, 40, '#8a3f8a');
+    rect(ctx, 3, 28, 40, 3, PAL.pink);
+    rect(ctx, 3, 31, 40, 1, '#5d275d');
+    for (let y = 36; y < 62; y += 7) for (let x = (y % 2 ? 8 : 12); x < 40; x += 10) heart3(ctx, x, y, '#b55fb5');
+    rect(ctx, 3, 62, 40, 4, '#5d275d');
+    box(ctx, 0, 64, 46, 6, WOOD.dark); // footboard
+    rect(ctx, 1, 65, 44, 1, WOOD.top);
+    for (const x of [0, 42]) box(ctx, x, 62, 4, 10, WOOD.dark);
+  } },
+  // Dresser on the left wall: side face against the wall, drawers face right.
+  drawer: { w: 26, h: 36, draw(ctx) {
+    box(ctx, 0, 0, 26, 7, WOOD.top); // top
+    box(ctx, 0, 6, 7, 30, WOOD.dark); // side
+    box(ctx, 6, 6, 20, 30, WOOD.mid); // front
+    for (const y of [15, 24]) rect(ctx, 7, y, 18, 1, PAL.out);
+    for (const y of [10, 19, 28]) { rect(ctx, 14, y, 4, 2, PAL.out); rect(ctx, 15, y, 2, 1, PAL.yellow); }
+  } },
+  // Desk along the right wall, seen from above.
+  desk: { w: 42, h: 64, draw(ctx) {
+    box(ctx, 0, 0, 42, 46, WOOD.top);
+    for (const [x, y, l] of [[5, 8, 14], [20, 18, 16], [8, 30, 12], [24, 38, 10]]) rect(ctx, x, y, l, 1, '#b5784a');
+    box(ctx, 0, 44, 42, 6, WOOD.dark); // front edge
+    for (const x of [2, 36]) box(ctx, x, 49, 4, 15, WOOD.dark); // legs
+  } },
+  // Monitor turned toward the bed: screen on the left, back shell on the right.
+  // Frame 0 = on, frame 1 = a heart (the note is ready).
+  monitor: { w: 16, h: 22, frames: 2, draw(ctx, i) {
+    rect(ctx, 5, 18, 10, 4, PAL.out); // base
+    rect(ctx, 6, 19, 8, 2, '#566c86');
+    rect(ctx, 9, 14, 3, 5, PAL.out); // neck
+    rect(ctx, 10, 14, 1, 4, '#566c86');
+    rect(ctx, 11, 1, 5, 13, PAL.out); // back shell
+    rect(ctx, 12, 2, 3, 11, '#333c57');
+    box(ctx, 0, 0, 12, 15, i ? '#29366f' : '#3b5dc9'); // screen
+    if (i) {
+      heart3(ctx, 3, 5, PAL.pink);
+      heart3(ctx, 5, 5, PAL.pink);
+      rect(ctx, 4, 6, 4, 2, PAL.pink);
+      rect(ctx, 5, 8, 2, 1, PAL.pink);
+    } else {
+      for (const [y, l] of [[3, 7], [5, 5], [7, 8], [9, 4], [11, 6]]) rect(ctx, 2, y, l, 1, '#41a6f6');
+      rect(ctx, 1, 1, 1, 3, '#73eff7'); // glare
+    }
   } },
   note: { w: 8, h: 6, draw(ctx) {
     rect(ctx, 0, 0, 8, 6, PAL.out);
     rect(ctx, 1, 1, 6, 4, PAL.white);
     heart3(ctx, 2, 2, PAL.red);
   } },
-  bed: { w: 36, h: 16, draw(ctx) {
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 36; x++) {
-      const d = ((x - 17.5) ** 2) / 324 + ((y - 7.5) ** 2) / 64;
-      if (d <= 1) rect(ctx, x, y, 1, 1, d > 0.8 ? PAL.out : d > 0.45 ? '#5d275d' : '#8a3f8a');
-    }
+  // Black mini fridge, door facing left (silver handle on the room side).
+  // The lighter top face and highlight edge keep it readable on the navy carpet.
+  fridge: { w: 34, h: 34, draw(ctx) {
+    box(ctx, 0, 0, 34, 7, '#566c86'); // top
+    rect(ctx, 1, 1, 32, 1, PAL.gray); // shine on the top edge
+    box(ctx, 26, 6, 8, 28, PAL.out); // side
+    box(ctx, 0, 6, 27, 28, '#333c57'); // front
+    rect(ctx, 1, 7, 1, 26, '#566c86'); // highlight edge
+    rect(ctx, 1, 13, 25, 1, PAL.out); // freezer door line
+    rect(ctx, 3, 15, 1, 9, PAL.gray); // handle
+    rect(ctx, 3, 9, 1, 2, PAL.gray);
+    rect(ctx, 20, 9, 3, 1, PAL.gray); // logo
+  } },
+  // Black microwave on the fridge, same angle. The cat stands on its top.
+  microwave: { w: 20, h: 13, draw(ctx) {
+    box(ctx, 0, 0, 20, 5, PAL.gray); // top
+    rect(ctx, 1, 1, 18, 1, PAL.white);
+    box(ctx, 14, 4, 6, 9, PAL.out);
+    box(ctx, 0, 4, 15, 9, '#333c57'); // front
+    box(ctx, 2, 5, 8, 7, '#29366f'); // window
+    rect(ctx, 3, 6, 2, 1, '#566c86');
+    rect(ctx, 10, 6, 1, 5, PAL.gray); // handle
+    for (const y of [6, 8]) rect(ctx, 12, y, 2, 1, PAL.gray); // buttons
+    rect(ctx, 12, 10, 2, 1, PAL.green);
+  } },
+  // Global Industrial tri-temp UV-C water dispenser (WB670436), all black:
+  // 3 buttons on top (hot is red), LED panel, recessed alcove with 3 spouts,
+  // red hot water sticker, ribbed drip tray, plain lower cabinet, vented side.
+  dispenser: { w: 26, h: 50, draw(ctx) {
+    box(ctx, 0, 0, 26, 5, '#333c57'); // top
+    for (const [x, c] of [[3, PAL.red], [8, PAL.gray], [13, PAL.gray]]) rect(ctx, x, 3, 3, 1, c); // buttons
+    box(ctx, 19, 4, 7, 46, PAL.out); // side
+    for (let y = 9; y < 46; y += 3) rect(ctx, 21, y, 3, 1, '#333c57'); // vents
+    box(ctx, 0, 4, 20, 46, '#333c57'); // front
+    rect(ctx, 1, 5, 1, 44, '#566c86'); // highlight edge
+    for (const [x, c] of [[5, PAL.green], [8, PAL.blue], [11, PAL.white], [14, '#73eff7']]) rect(ctx, x, 9, 1, 1, c); // LEDs
+    rect(ctx, 3, 13, 14, 13, PAL.out); // alcove
+    for (const x of [5, 9, 13]) { rect(ctx, x, 12, 1, 1, PAL.white); rect(ctx, x, 14, 1, 1, PAL.gray); } // arrows + spouts
+    rect(ctx, 8, 18, 3, 3, PAL.red); // hot water sticker
+    rect(ctx, 9, 19, 1, 1, PAL.white);
+    rect(ctx, 2, 25, 16, 3, PAL.out); // drip tray
+    for (let x = 3; x < 17; x += 2) rect(ctx, x, 26, 1, 1, '#566c86');
+    rect(ctx, 1, 29, 18, 1, PAL.out); // cabinet seam
   } },
   plant: { w: 16, h: 30, draw(ctx) {
     parts(ctx, 0, [
@@ -384,6 +513,9 @@ const FURNITURE = {
       { x: 4, y: 19, w: 8, h: 10, c: PAL.red },
     ]);
   } },
+  // Her photo wall in the top left corner: scattered polaroids of her and her
+  // friends, a photo booth strip, washi tape, and two photos on the side wall.
+  friends: { w: 70, h: 62, draw(ctx) { drawFriendsWall(ctx); } },
   photo: { w: 26, h: 24, draw(ctx) {
     rect(ctx, 0, 0, 26, 24, PAL.out);
     rect(ctx, 1, 1, 24, 22, PAL.yellow);
@@ -392,6 +524,95 @@ const FURNITURE = {
     heart3(ctx, 14, 10, PAL.pink);
   } },
 };
+
+// ---------- photo wall ----------
+
+const SKIN = ['#8d5524', '#a8693a', '#c68642', '#e0ac69', '#f1c27d', '#ffdbac'];
+const HAIR = ['#1a1c2c', '#3b2416', '#6b3e26', '#c9a15a', '#b13e53'];
+const SHIRT = [PAL.pink, PAL.blue, PAL.green, PAL.yellow, PAL.white, '#ef7d57', '#5d275d', PAL.navy];
+const SCENE = [
+  ['#73eff7', '#41a6f6'], // sky
+  ['#73eff7', '#ffcd75'], // beach: sky over sand
+  ['#ff77a8', '#5d275d'], // party
+  ['#a7f070', '#38b764'], // park
+  ['#29366f', '#1a1c2c'], // night out
+  ['#f4f4f4', '#94b0c2'], // indoors
+];
+const NIDHI = { skin: '#a8693a', hair: '#1a1c2c', long: true };
+
+// One tiny person in a photo: hair, face, shirt. w = 2 or 3 px wide.
+function person(ctx, x, y, w, p, shirt) {
+  rect(ctx, x, y, w, 1, p.hair); // hair
+  rect(ctx, x, y + 1, w, 2, p.skin); // face
+  if (p.long) { rect(ctx, x - 1, y, 1, 4, p.hair); rect(ctx, x + w, y, 1, 4, p.hair); }
+  rect(ctx, x - (w > 2 ? 1 : 0), y + 3, w + (w > 2 ? 2 : 0), 8, shirt); // shoulders (clipped by the photo)
+}
+
+// An 8x8 picture: a scene + 1 to 3 people, Nidhi in most of them.
+function picture(ctx, x, y, w, h, rnd) {
+  const [top, bottom] = SCENE[Math.floor(rnd() * SCENE.length)];
+  rect(ctx, x, y, w, h, top);
+  rect(ctx, x, y + Math.ceil(h / 2) + 1, w, Math.floor(h / 2) - 1, bottom);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  const n = w < 6 ? 1 : 1 + Math.floor(rnd() * 3);
+  const pw = n === 3 ? 2 : w < 6 ? 2 : 3;
+  const gap = n === 1 ? 0 : Math.floor((w - n * pw) / n);
+  let px = x + Math.floor((w - (n * pw + (n - 1) * gap)) / 2);
+  const nidhiAt = rnd() < 0.8 ? Math.floor(rnd() * n) : -1;
+  for (let i = 0; i < n; i++) {
+    const p = i === nidhiAt ? NIDHI : {
+      skin: SKIN[Math.floor(rnd() * SKIN.length)],
+      hair: HAIR[Math.floor(rnd() * HAIR.length)],
+      long: rnd() < 0.5,
+    };
+    person(ctx, px, y + 2 + (rnd() < 0.3 ? 1 : 0), pw, p, SHIRT[Math.floor(rnd() * SHIRT.length)]);
+    px += pw + gap;
+  }
+  ctx.restore();
+}
+
+function polaroid(ctx, x, y, rnd) {
+  rect(ctx, x, y, 10, 12, PAL.out);
+  rect(ctx, x + 1, y + 1, 8, 10, PAL.white);
+  picture(ctx, x + 1, y + 1, 8, 8, rnd);
+}
+
+function tape(ctx, x, y, c) {
+  rect(ctx, x, y, 4, 2, c);
+  rect(ctx, x + 1, y, 1, 1, PAL.white);
+}
+
+function drawFriendsWall(ctx) {
+  let seed = 2024;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  // two on the left side wall, seen edge on (thin)
+  for (const y of [8, 30]) {
+    rect(ctx, 1, y, 4, 11, PAL.out);
+    rect(ctx, 2, y + 1, 2, 9, PAL.white);
+    rect(ctx, 2, y + 2, 2, 5, SCENE[Math.floor(rnd() * SCENE.length)][0]);
+    rect(ctx, 2, y + 4, 2, 2, NIDHI.skin);
+  }
+  // scattered on the back wall, back to front (later ones overlap earlier ones)
+  const spots = [
+    [9, 3], [21, 1], [33, 4], [46, 2], [57, 6],
+    [11, 18], [24, 16], [36, 19], [58, 22],
+    [8, 34], [20, 33], [33, 36],
+  ];
+  const tapes = [PAL.pink, PAL.yellow, '#a7f070'];
+  spots.forEach(([x, y], i) => {
+    polaroid(ctx, x, y, rnd);
+    if (i % 3 !== 2) tape(ctx, x + 3, y - 1, tapes[i % 3]);
+  });
+  // photo booth strip
+  const sx = 47, sy = 16;
+  rect(ctx, sx, sy, 8, 27, PAL.out);
+  rect(ctx, sx + 1, sy + 1, 6, 25, PAL.white);
+  for (let k = 0; k < 4; k++) picture(ctx, sx + 2, sy + 2 + k * 6, 4, 5, () => (k === 0 ? 0.5 : rnd()));
+  tape(ctx, sx + 2, sy - 1, PAL.pink);
+}
 
 // ---------- strawberry matcha ----------
 // Iced strawberry matcha in a clear glass: strawberry purée at the bottom, milk in
@@ -530,7 +751,16 @@ export function registerPlaceholderArt(scene) {
     addAnims(scene, `acc-${a.id}`);
   }
   addSingle(scene, 'room', ROOM.w, ROOM.h, drawRoom);
-  for (const [k, v] of Object.entries({ ...FURNITURE, ...FX })) addSingle(scene, k, v.w, v.h, v.draw);
+  for (const [k, v] of Object.entries({ ...FURNITURE, ...FX })) {
+    const n = v.frames ?? 1;
+    if (n === 1) { addSingle(scene, k, v.w, v.h, v.draw); continue; }
+    const c = canvas(v.w * n, v.h);
+    const fctx = c.getContext('2d');
+    for (let i = 0; i < n; i++) { fctx.save(); fctx.translate(i * v.w, 0); v.draw(fctx, i); fctx.restore(); }
+    canvases[k] = c;
+    const tex = scene.textures.addCanvas(k, c);
+    for (let i = 0; i < n; i++) tex.add(i, 0, i * v.w, 0, v.w, v.h);
+  }
 
   const m = canvas(MATCHA.w * MATCHA.frames.length, MATCHA.h);
   const mctx = m.getContext('2d');
@@ -561,4 +791,21 @@ function sheetFor(key, drawFrame) {
   FRAMES.forEach((f, i) => drawFrame(ctx, i * FRAME, f));
   canvases[key] = c;
   return c;
+}
+
+// Just the accessory, cropped to its pixels and scaled up (for small icons).
+export function drawAccIcon(target, id) {
+  const src = canvases[`acc-${id}`] ?? sheetFor(`acc-${id}`, (c, ox, f) => drawAccFrame(c, ox, f, id));
+  const data = src.getContext('2d').getImageData(0, 0, FRAME, FRAME).data;
+  let x1 = FRAME, y1 = FRAME, x2 = -1, y2 = -1;
+  for (let y = 0; y < FRAME; y++) for (let x = 0; x < FRAME; x++) {
+    if (data[(y * FRAME + x) * 4 + 3]) { x1 = Math.min(x1, x); y1 = Math.min(y1, y); x2 = Math.max(x2, x); y2 = Math.max(y2, y); }
+  }
+  const ctx = target.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, target.width, target.height);
+  if (x2 < 0) return;
+  const w = x2 - x1 + 1, h = y2 - y1 + 1;
+  const s = Math.max(1, Math.floor(Math.min(target.width / w, target.height / h)));
+  ctx.drawImage(src, x1, y1, w, h, Math.floor((target.width - w * s) / 2), Math.floor((target.height - h * s) / 2), w * s, h * s);
 }

@@ -3,26 +3,45 @@ import { CONFIG } from '../config.js';
 import { ACCESSORIES, FRAMES, jointTip, matchaFrame } from '../art/placeholder.js';
 import { Cat } from '../objects/Cat.js';
 import { sfx } from '../sfx.js';
-import { DEBUG } from '../state.js';
+import { DEBUG, params } from '../state.js';
 import * as ui from '../ui/ui.js';
 
-// Room layout in game pixels (canvas is 192x256, portrait).
-const FLOOR = { x1: 12, x2: 180, y1: 100, y2: 248 };
-const NOTE_Y = 137;
+// Nidhi's room in game pixels (canvas is 192x256, portrait). See ROOM_PLAN.md.
+const FLOOR = { x1: 10, x2: 182, y1: 96, y2: 248 };
+// Where the cat's feet can't go on the floor (furniture footprints, already
+// widened by the cat's half width). Floor taps inside get pushed out to `x`.
+const BLOCKED = [
+  { x1: 0, x2: 58, y1: 0, y2: 146, x: 58 }, // bed
+  { x1: 0, x2: 40, y1: 146, y2: 200, x: 40 }, // drawer
+  { x1: 140, x2: 192, y1: 0, y2: 156, x: 140 }, // desk
+  { x1: 148, x2: 192, y1: 156, y2: 208, x: 148 }, // water dispenser (behind the fridge)
+  { x1: 144, x2: 192, y1: 208, y2: 256, x: 144 }, // fridge
+];
+const NOTE = { x: 160, y: 120 };
 
 // Match a typed name against CONFIG.nameEggs, ignoring case, accents, dots and extra spaces.
 const norm = (s) => (s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
 const findEgg = (name) => CONFIG.nameEggs.find((e) => e.names.some((n) => norm(n) === norm(name)));
-const GLASS = { x: 102, y: 112 }; // bottom-left corner; the straw tip meets the cat's mouth at SPOTS.eat
+// The matcha sits on the fridge top, left of the microwave (bottom-left corner here).
+// The cat stands on the microwave at SPOTS.microwaveTop and leans down ('drink'
+// pose): its mouth is 26 px right of the glass's left edge and 6 px above its feet,
+// which puts it exactly on the straw tip (glass top, column 11).
+const GLASS = { x: 153, y: 222 };
 const SPOTS = {
-  start: [90, 180],
-  eat: [127, 111],
-  nap: [40, 228],
-  tableFront: [124, 166],
-  tableTop: [146, 137],
-  window: [44, 106],
-  plant: [152, 116], // left of the plant so the cat never covers it (taps must reach the plant)
+  start: [96, 190],
+  fridgeFront: [136, 238],
+  microwaveTop: [GLASS.x + 26, GLASS.y - 11],
+  bedFoot: [60, 142],
+  bed: [28, 118], // lying on the blanket
+  deskFront: [134, 132],
+  deskTop: [166, 124],
+  window: [96, 98],
+  drawer: [44, 180],
+  plant: [46, 172], // right of the drawer so the cat never covers the plant (taps must reach it)
+  dispenser: [142, 192],
 };
+// Depths: furniture is sorted by its bottom edge, a perched cat sits just above its perch.
+const DEPTH = { bed: 136, drawer: 190, desk: 150, dispenser: 204, fridge: 250 };
 
 export class Room extends Phaser.Scene {
   constructor() {
@@ -34,19 +53,27 @@ export class Room extends Phaser.Scene {
     this.cmd = 0;
     this.busy = true; // input locked until the title screen is dismissed
     this.ready = false;
-    this.onTable = false;
+    this.perch = null; // { down: [x, y], depth } while the cat is up on furniture
+    this.landing = null; // promise of a jump that is in progress
     this.lastPet = 0;
     this.lastNag = 0;
     this.tick = 0;
 
     this.add.image(0, 0, 'room').setOrigin(0).setDepth(-1000);
-    this.photo = this.add.image(120, 26, 'photo').setOrigin(0).setDepth(-999).setInteractive();
-    this.windowZone = this.add.zone(42, 39, 40, 34).setInteractive();
-    this.bed = this.add.image(40, 238, 'bed').setOrigin(0.5, 1).setDepth(210).setInteractive();
-    this.glass = this.add.sprite(GLASS.x, GLASS.y, 'matcha', matchaFrame(this.state.glass)).setOrigin(0, 1).setDepth(GLASS.y).setInteractive();
-    this.plant = this.add.image(178, 112, 'plant').setOrigin(0.5, 1).setDepth(112).setInteractive();
-    this.table = this.add.image(150, 160, 'table').setOrigin(0.5, 1).setDepth(160).setInteractive();
-    this.note = this.add.image(158, NOTE_Y, 'note').setOrigin(0.5, 1).setDepth(161).setInteractive();
+    this.photo = this.add.image(134, 24, 'photo').setOrigin(0).setDepth(-999).setInteractive();
+    this.windowZone = this.add.zone(96, 35, 40, 34).setInteractive();
+    this.friends = this.add.image(0, 2, 'friends').setOrigin(0).setDepth(-999).setInteractive();
+    this.bed = this.add.image(4, 136, 'bed').setOrigin(0, 1).setDepth(DEPTH.bed).setInteractive();
+    this.drawer = this.add.image(2, 190, 'drawer').setOrigin(0, 1).setDepth(DEPTH.drawer).setInteractive();
+    this.plant = this.add.image(15, 160, 'plant').setOrigin(0.5, 1).setDepth(DEPTH.drawer + 1).setInteractive();
+    this.desk = this.add.image(148, 150, 'desk').setOrigin(0, 1).setDepth(DEPTH.desk).setInteractive();
+    this.monitor = this.add.image(171, 108, 'monitor', 0).setOrigin(0, 1).setDepth(DEPTH.desk + 1).setInteractive();
+    this.note = this.add.image(NOTE.x, NOTE.y, 'note').setOrigin(0.5, 1).setDepth(DEPTH.desk + 2).setInteractive();
+    this.fridge = this.add.image(154, 250, 'fridge').setOrigin(0, 1).setDepth(DEPTH.fridge).setInteractive();
+    this.microwave = this.add.image(168, 221, 'microwave').setOrigin(0, 1).setDepth(DEPTH.fridge + 1).setInteractive();
+    this.glass = this.add.sprite(GLASS.x, GLASS.y, 'matcha', matchaFrame(this.state.glass)).setOrigin(0, 1).setDepth(DEPTH.fridge + 4).setInteractive();
+    this.dispenser = this.add.image(162, 204, 'dispenser').setOrigin(0, 1).setDepth(DEPTH.dispenser).setInteractive();
+    this.water = this.add.rectangle(171, 169, 1, 9, 0x73eff7).setOrigin(0.5, 0).setDepth(DEPTH.dispenser + 1).setVisible(false);
 
     this.cat = new Cat(this, ...SPOTS.start);
     this.cat.base.setInteractive();
@@ -83,7 +110,15 @@ export class Room extends Phaser.Scene {
 
     this.input.on('pointerdown', (p, over) => this.onTap(p, over));
 
-    ui.buildWardrobe(() => this.state.equipped, (a) => this.toggleAccessory(a));
+    ui.buildWardrobe(
+      () => this.state.equipped,
+      (a) => this.toggleAccessory(a),
+      (a) => ui.say(CONFIG.xp.locked.replace('{level}', CONFIG.xp.unlocks.indexOf(a.id) + 1)),
+    );
+    this.lastXp = {}; // cooldowns per XP source
+    if (params.get('xp') === 'max') this.gainXp(CONFIG.xp.levels.reduce((a, b) => a + b, 0), { quiet: true });
+    ui.setLocks(this.state.unlocked);
+    ui.updateXp(this.state);
     ui.onAction((a) => this.onAction(a));
     ui.updateMeters(this.state);
 
@@ -130,7 +165,7 @@ export class Room extends Phaser.Scene {
   // ---------- loop ----------
 
   update(time, dt) {
-    if (!this.onTable) this.cat.setDepth(this.cat.y);
+    this.cat.setDepth(this.perch ? this.perch.depth : this.cat.y);
     this.bang.setPosition(this.cat.x, this.cat.y - 36 + Math.round(Math.sin(time / 150)));
     ui.placeBubble(this.game, this.cat.x, this.cat.y - 30);
     this.zz.setPosition(this.cat.x + (this.cat.facingLeft ? -6 : 6), this.cat.y - 14);
@@ -169,16 +204,22 @@ export class Room extends Phaser.Scene {
     const target = over[0];
     if (!target) return this.walkFloor(p.worldX, p.worldY);
     sfx.tap();
+    this.discover(target);
     if (target === this.cat.base) return this.ready ? this.reveal() : this.pet();
     if (target === this.glass) return this.feed();
     if (target === this.bed) return this.nap();
-    if (target === this.note || target === this.table) {
+    if (target === this.fridge) return this.feed();
+    if (target === this.drawer) return this.openDrawer();
+    if (target === this.dispenser) return this.getWater();
+    if (target === this.microwave) return this.visit(SPOTS.fridgeFront, CONFIG.flavor.microwave);
+    if (target === this.note || target === this.desk || target === this.monitor) {
       if (this.state.answer === 'yes') return this.rereadLetter();
       return this.ready ? this.reveal() : this.noteNotYet();
     }
     if (target === this.plant) return this.tapPlant();
     if (target === this.windowZone) return this.visit(SPOTS.window, CONFIG.flavor.window);
     if (target === this.photo) return this.showPhoto();
+    if (target === this.friends) return this.lookAtFriends();
   }
 
   onAction(action) {
@@ -201,18 +242,67 @@ export class Room extends Phaser.Scene {
     return new Promise((r) => this.time.delayedCall(ms, r));
   }
 
+  // Jump down first if the cat is up on furniture, then walk.
+  // Resolves true on arrival, false if a newer command took over.
+  async go(x, y, id = this.cmd) {
+    await this.ground();
+    if (id !== this.cmd) return false;
+    return (await this.cat.walkTo(x, y)) && id === this.cmd;
+  }
+
+  async ground() {
+    while (this.landing) await this.landing;
+    if (!this.perch) return;
+    const down = this.perch.down;
+    this.perch = null;
+    this.zz.stop();
+    await (this.landing = this.cat.jumpTo(...down).finally(() => (this.landing = null)));
+  }
+
+  // Walk to `from`, then jump up to `to` and stay there until the next walk.
+  async climb(from, to, depth, id = this.cmd) {
+    while (this.landing) await this.landing;
+    if (this.perch?.to === to) return id === this.cmd; // already up there
+    if (!(await this.go(...from, id))) return false;
+    this.perch = { down: from, to, depth };
+    await (this.landing = this.cat.jumpTo(...to).finally(() => (this.landing = null)));
+    return id === this.cmd;
+  }
+
   async walkFloor(x, y) {
-    this.newCmd();
-    await this.cat.walkTo(
-      Phaser.Math.Clamp(x, FLOOR.x1, FLOOR.x2),
-      Phaser.Math.Clamp(y, FLOOR.y1, FLOOR.y2),
-    );
+    const id = this.newCmd();
+    x = Phaser.Math.Clamp(x, FLOOR.x1, FLOOR.x2);
+    y = Phaser.Math.Clamp(y, FLOOR.y1, FLOOR.y2);
+    const b = BLOCKED.find((r) => x >= r.x1 && x < r.x2 && y >= r.y1 && y < r.y2);
+    if (b) x = b.x;
+    await this.go(x, y, id);
   }
 
   async visit([x, y], line) {
     const id = this.newCmd();
-    if (!(await this.cat.walkTo(x, y)) || id !== this.cmd) return;
+    if (!(await this.go(x, y, id))) return;
     if (line) ui.say(line);
+  }
+
+  // Her drawer is where the accessories live.
+  async openDrawer() {
+    const id = this.newCmd();
+    if (!(await this.go(...SPOTS.drawer, id))) return;
+    this.cat.face(true);
+    ui.toggleWardrobe(true);
+  }
+
+  // Tri-temp dispenser: a short stream from the cold spout.
+  async getWater() {
+    const id = this.newCmd();
+    if (!(await this.go(...SPOTS.dispenser, id))) return;
+    this.cat.face(false);
+    this.water.setVisible(true);
+    sfx.water();
+    ui.say(CONFIG.flavor.dispenser);
+    this.gainXp(CONFIG.xp.gain.water, { source: 'water' });
+    await this.wait(1100);
+    this.water.setVisible(false);
   }
 
   // Plant easter egg: from the Nth tap on, the cat decides to smoke it instead.
@@ -225,7 +315,7 @@ export class Room extends Phaser.Scene {
 
     this.plantEggRunning = true;
     const id = this.newCmd();
-    const ok = (await this.cat.walkTo(...SPOTS.plant)) && id === this.cmd
+    const ok = (await this.go(...SPOTS.plant, id))
       && (ui.say(egg.say, 3200), await this.wait(3000), id === this.cmd);
     this.plantEggRunning = false;
     if (!ok) return; // interrupted by another action: the next plant tap tries again
@@ -280,18 +370,19 @@ export class Room extends Phaser.Scene {
       this.bump('happy', CONFIG.meters.pet);
       this.lastPet = this.time.now;
     }
+    this.gainXp(CONFIG.xp.gain.pet, { source: 'pet' });
     const id = this.cmd;
     this.time.delayedCall(1200, () => id === this.cmd && this.cat.play('idle'));
   }
 
-  // Pour (if needed) while the cat walks over, then sip the glass empty.
+  // Pour (if needed) while the cat jumps onto the microwave, then lean down and sip the glass empty.
   async feed() {
     const id = this.newCmd();
-    const walking = this.cat.walkTo(...SPOTS.eat);
+    const climbing = this.climb(SPOTS.fridgeFront, SPOTS.microwaveTop, DEPTH.fridge + 3, id);
     if (this.state.glass < 4) await (this.pouring ??= this.pour().finally(() => (this.pouring = null)));
-    if (!(await walking) || id !== this.cmd) return;
+    if (!(await climbing) || id !== this.cmd) return;
     this.cat.face(true);
-    this.cat.play('sip');
+    this.cat.play('drink');
     sfx.slurp();
     if (!this.saidMatcha) {
       this.saidMatcha = true;
@@ -303,8 +394,11 @@ export class Room extends Phaser.Scene {
       this.setGlass(q);
     }
     this.hearts.explode(2, this.cat.x, this.cat.y - 24);
+    this.gainXp(this.needed('hunger') * CONFIG.xp.gain.feed);
     this.bump('hunger', CONFIG.meters.feed);
     this.cat.play('idle');
+    await this.wait(500);
+    if (id === this.cmd) await this.ground(); // hop back down
   }
 
   // Refill in recipe order: strawberry, then milk, then matcha. Not cancellable.
@@ -324,27 +418,87 @@ export class Room extends Phaser.Scene {
     this.glass.setFrame(matchaFrame(quarters));
   }
 
+  // Hop onto her bed and sleep on the blanket. The cat stays in bed until the next walk.
   async nap() {
     const id = this.newCmd();
-    if (!(await this.cat.walkTo(...SPOTS.nap)) || id !== this.cmd) return;
+    if (!(await this.climb(SPOTS.bedFoot, SPOTS.bed, DEPTH.bed + 1, id))) return;
+    this.cat.face(false);
     this.cat.play('sleep');
     this.zz.start();
     sfx.sleep();
+    ui.say(CONFIG.flavor.nap, 3200);
     await this.wait(3500);
     if (id !== this.cmd) return;
     this.zz.stop();
+    this.gainXp(this.needed('energy') * CONFIG.xp.gain.nap);
     this.bump('energy', CONFIG.meters.nap);
     this.cat.play('idle');
   }
 
+  // ---------- experience ----------
+
+  // Caring when a need is actually low is worth more.
+  needed(key) {
+    return this.state[key] < CONFIG.xp.neededBelow ? CONFIG.xp.neededMultiplier : 1;
+  }
+
+  // First tap on each thing in her room gives a little XP.
+  discover(target) {
+    const keys = new Map([
+      [this.windowZone, 'window'], [this.photo, 'photo'], [this.friends, 'friends'], [this.plant, 'plant'],
+      [this.microwave, 'microwave'], [this.dispenser, 'dispenser'], [this.drawer, 'drawer'], [this.desk, 'desk'],
+    ]);
+    const key = keys.get(target);
+    if (!key || this.state.discovered.includes(key)) return;
+    this.state.discovered.push(key);
+    this.gainXp(CONFIG.xp.gain.discover);
+  }
+
+  // Add XP, level up as many times as it covers, unlock the matching accessories.
+  gainXp(amount, { source, quiet } = {}) {
+    if (!amount) return;
+    if (source) {
+      const cd = CONFIG.xp.cooldownMs[source] ?? 0;
+      if (this.time.now - (this.lastXp[source] ?? -Infinity) < cd) return;
+      this.lastXp[source] = this.time.now;
+    }
+    const s = this.state;
+    const { levels, unlocks } = CONFIG.xp;
+    s.xp += amount;
+    if (!quiet) ui.floatText(this.game, this.cat.x, this.cat.y - 30, `+${amount}`);
+    const gained = [];
+    while (s.level <= levels.length && s.xp >= levels.slice(0, s.level).reduce((a, b) => a + b, 0)) {
+      s.level++;
+      const id = unlocks[s.level - 1];
+      if (id && !s.unlocked.includes(id)) { s.unlocked.push(id); gained.push(id); }
+    }
+    ui.updateXp(s);
+    if (!gained.length) return;
+    ui.setLocks(s.unlocked);
+    if (quiet) return;
+    const letterNow = !this.ready && s.level >= CONFIG.trigger.level && s.level - gained.length < CONFIG.trigger.level;
+    this.levelUpPending = true;
+    this.checkTrigger();
+    this.levelUpPending = false;
+    const item = ACCESSORIES.find((a) => a.id === gained.at(-1));
+    ui.flashLevelUp();
+    sfx.levelUp();
+    this.pourFx.explode(10, this.cat.x, this.cat.y - 20);
+    this.time.delayedCall(500, () => {
+      if (this.busy) return;
+      const line = letterNow && this.ready ? CONFIG.trigger.levelLine : CONFIG.xp.levelUp;
+      ui.say(line.replace('{level}', s.level).replace('{item}', item.label), letterNow ? 4500 : 3200);
+    });
+  }
+
   async noteNotYet() {
     const id = this.newCmd();
-    if (!(await this.cat.walkTo(...SPOTS.tableFront)) || id !== this.cmd) return;
+    if (!(await this.go(...SPOTS.deskFront, id))) return;
     this.cat.face(false);
     ui.say(CONFIG.flavor.noteEarly);
   }
 
-  // After "Yes" the note stays on the table so she can read it again.
+  // After "Yes" the note stays on the desk so she can read it again.
   async rereadLetter() {
     this.newCmd();
     this.busy = true;
@@ -352,6 +506,18 @@ export class Room extends Phaser.Scene {
     await ui.showLetter({ reread: true });
     this.busy = false;
     ui.setActionsEnabled(true);
+  }
+
+  // Her photo wall: walk to the foot of the bed, look up, say something.
+  async lookAtFriends() {
+    const id = this.newCmd();
+    if (!(await this.go(...SPOTS.bedFoot, id))) return;
+    this.cat.face(true);
+    ui.say(CONFIG.flavor.friends);
+    if (CONFIG.friendsCard.src) {
+      await this.wait(1200);
+      if (id === this.cmd) ui.showCard(CONFIG.friendsCard);
+    }
   }
 
   showPhoto() {
@@ -366,6 +532,7 @@ export class Room extends Phaser.Scene {
     sfx.equip();
     if (eq[a.slot] && !this.state.triedOn.includes(a.id)) {
       this.state.triedOn.push(a.id);
+      this.gainXp(CONFIG.xp.gain.firstTry);
       this.bump('happy', CONFIG.meters.equipFirstTime);
       this.hearts.explode(2, this.cat.x, this.cat.y - 24);
     }
@@ -385,16 +552,26 @@ export class Room extends Phaser.Scene {
     if (this.ready || this.busy || this.state.answer === 'yes') return;
     const s = this.state;
     const t = CONFIG.trigger;
-    const worn = Object.values(s.equipped).filter(Boolean).length;
-    const earned = s.happy >= t.happy && worn >= t.accessories && s.interactions >= t.interactions;
-    if (!(DEBUG || earned || s.playSeconds >= t.fallbackSeconds || s.answer === 'think')) return;
+    if (s.level < t.level && s.playSeconds >= t.catchUpSeconds) {
+      // safety net: never make her wait more than catchUpSeconds for the letter
+      if (this.catchingUp) return;
+      this.catchingUp = true;
+      ui.say(t.catchUpLine, 2500);
+      this.time.delayedCall(2200, () => {
+        const need = CONFIG.xp.levels.slice(0, t.level - 1).reduce((a, b) => a + b, 0) - s.xp;
+        this.gainXp(Math.max(0, need)); // calls checkTrigger again once the level is reached
+      });
+      return;
+    }
+    if (!(DEBUG || s.level >= t.level || s.answer === 'think')) return;
 
     this.ready = true;
+    this.monitor.setFrame(1); // heart on the screen
     this.sparkles.start();
     this.noteTween = this.tweens.add({ targets: this.note, y: this.note.y - 2, duration: 400, yoyo: true, repeat: -1 });
     this.bang.setVisible(true);
     sfx.sparkle();
-    ui.say(CONFIG.flavor.noteReady, 4000);
+    if (!this.levelUpPending) ui.say(CONFIG.flavor.noteReady, 4000); // a level up line already mentions it
   }
 
   async reveal() {
@@ -406,12 +583,9 @@ export class Room extends Phaser.Scene {
     ui.hideBubble();
     this.bang.setVisible(false);
 
-    await this.cat.walkTo(...SPOTS.tableFront);
-    this.onTable = true;
-    this.cat.setDepth(this.table.depth + 5);
-    await this.cat.jumpTo(...SPOTS.tableTop);
+    await this.climb(SPOTS.deskFront, SPOTS.deskTop, DEPTH.desk + 5);
     this.noteTween?.stop();
-    this.note.setY(NOTE_Y);
+    this.note.setY(NOTE.y);
     this.sparkles.stop();
     this.note.setVisible(false); // the cat is holding it
     this.cat.face(false);
@@ -435,10 +609,10 @@ export class Room extends Phaser.Scene {
       this.cat.play('sit');
       await ui.showCard({ ...CONFIG.thinkCard, body: this.fill(CONFIG.thinkCard.body) });
     }
-    this.note.setY(NOTE_Y).setVisible(true); // back on the table either way
+    this.note.setY(NOTE.y).setVisible(true); // back on the desk either way
+    if (answer !== 'yes') this.monitor.setFrame(0); // after Yes the heart stays on
 
-    await this.cat.jumpTo(...SPOTS.tableFront);
-    this.onTable = false;
+    await this.ground();
     this.cat.play(answer === 'yes' ? 'happy' : 'idle');
     this.ready = false;
     this.busy = false;
